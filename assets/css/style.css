@@ -1,34 +1,28 @@
+:root {
+	--background-color: #ffffcc;
+}
+
 body, html {
 	font-family: 'Titillium Web', sans-serif;
 	text-align: center;
-}
-
-body {
-	background: rgb(204, 255, 153);
+	background: var(--background-color);
 }
 
 button {
-	border-radius: 6px;
-	margin: 0 10px;
+	border-radius: 4px;
+	margin: 5px 10px;
 }
 
-h1 {
-	font-size: 2.5rem;
-	margin: 25px 0;
-}
 
-h5 {
-	font-size: 1.25rem;
-	margin: 10px 0;
-}
 
 header {
+	box-sizing: border-box;
 	position: fixed;
 	top: 0;
     right: 0;
     left: 0;
-    background: silver;
-    z-index: 2;
+    background: var(--background-color);
+    z-index: 3;
 }
 
 input {
@@ -36,20 +30,15 @@ input {
 	margin: 0 10px;
 }
 
-/*header::after {
-    content: "";
-    clear: both;
-    display: table;
-}*/
-
 main {
 	position: relative;
-	top: 250px;
 }
 
 .animated-gif {
-	border: 1px solid silver;
+	border: 1px solid grey;
 	border-radius: 8px;
+	display: block;
+	z-index: 1;
 }
 
 .container {
@@ -59,8 +48,17 @@ main {
 	justify-content: space-around;
 }
 
-.giffy-search-button {
-	
+.download-button {
+
+}
+
+.gif-caption, .gif-rating {
+	position: relative;
+	color: white;
+	text-shadow: 2px 2px black;
+	/*z-index: -1;*/
+	padding-bottom: 10px;
+	visibility: hidden;
 }
 
 .italics-on-hover:hover {
@@ -75,19 +73,36 @@ main {
 }
 
 @media (max-width: 967px) { /* Smaller screens */
-	body {
-		
+
+	h1 {
+		font-size: 1.8rem;
+		margin: 15px 0;
 	}
-	a, .gif-caption {
-		font-size: .8rem;
+
+	h5 {
+		font-size: 1rem;
+		margin: 8px 0;
 	}
+
+	.gif-caption, .gif-rating {
+		font-size: .7rem;
+	}
+
 }
 
 @media (min-width: 968px) {
-	body {
-		
+
+	h1 {
+		font-size: 2.5rem;
+		margin: 25px 0;
 	}
-	a, .gif-caption {
-		font-size: 1rem;
+
+	h5 {
+		font-size: 1.25rem;
+		margin: 10px 0;
+	}
+
+	.gif-caption, .gif-rating {
+		font-size: 1.1rem;
 	}
 }

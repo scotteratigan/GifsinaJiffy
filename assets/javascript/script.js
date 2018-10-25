@@ -5,6 +5,7 @@ const giffyAPIkey = 'LifqQYtiTIo3bDomGTB3jcQOa8jS5LQQ';
 const gifsDisplayedPerRequest = 10;
 const largeScreenSize = 968;
 let topics = ['thumbsup', 'highfive', 'cheers', 'slow clap', 'good job', 'applause', 'grin'];
+let captionOffset;
 
 // Initialization of variables:
 let searchButtons = [], // list of search Giffy search terms/buttons
@@ -17,16 +18,22 @@ let screen = { // object to track screen size and resize gifs if screen grows or
 	isSmall: true,
 	wasSmall: true,
 	checkSize: function() {
+		// set top margin so that gifs don't appear below fixed-position header
+		let headerHeight = $('header').outerHeight();
+		$('main').css('margin-top', headerHeight);
 		if ($(document).width() < largeScreenSize) {
 			screen.isSmall = true;
+			captionOffset = '-100px';
 		}
 		else {
 			screen.isSmall = false;
+			captionOffset = '-200px';
 		}
 	},
 	resized: function() { // resized is called by a debounced window.resize event
 		screen.wasSmall = screen.isSmall;
 		screen.checkSize();
+
 		if (screen.isSmall && !screen.wasSmall) {
 			redisplayAllGifs('small');
 		}
@@ -62,6 +69,7 @@ function displaySearchButtons() {
 	topics.forEach(function(searchTerm) {
 		searchButtons.push(makeSearchButton(searchTerm));
 	});
+	//searchButtons = searchButtons.reverse();
 	$('#search-buttons-area').empty();
 	// For performance, append all elements at once to avoid excessive reflow:
 	$('#search-buttons-area').append(searchButtons);
@@ -97,24 +105,30 @@ function makeImageDiv(giffyJSON) {
 	div.attr('class', 'toggleable-animation-div');
 	let image = makeImage(giffyJSON);
 	div.append(image);
-	let title = $('<p>').attr('class', 'gif-caption');
-	title.text(giffyJSON.title.toLowerCase());
+	let titleElement = $('<p>').attr('class', 'gif-caption');
+	let title = giffyJSON.title.toLowerCase();
+	title = title.replace(/gif/, ""); // remove gif from filename/title (redundant)
+	title = title.replace(/\s{2,}/, " "); // strip out any extra whitespace in name
+	title = title.trim(); // strip out extra whitespace at ends of string
+	titleElement.text(title);
 	setTimeout(function() { // resizing the div via timeout in case caption/title is wider than pic
 		// Can't resize until we have the width of the element after downloading it.
+
 		let width = image.width() + 'px'
-		title.attr('style', `width: ${width};`);
+		titleElement.attr('style', `width: ${width}; top: ${captionOffset}`);
 	}, 333);
-	let rating = $('<p>').attr('class', 'gif-caption');
+	let rating = $('<p>').attr('class', 'gif-rating');
 	rating.text('Rating: ' + giffyJSON.rating);
-	let downloadFileName = giffyJSON.title.toLowerCase() + '.gif'
+	let downloadFileName = title + '.gif'
 	let downloadButton = $('<button>');
 	downloadButton.text('download');
 	downloadButton.attr('data-filename', downloadFileName);
 	downloadButton.attr('data-href', giffyJSON.images.original.url)
 	downloadButton.attr('class', 'download-button');
-	div.append(title);
-	div.append(rating);
+	rating.attr('style', `top: ${captionOffset}`);
 	div.append(downloadButton);
+	div.append(titleElement);
+	div.append(rating);
 	return div;
 }
 
@@ -132,6 +146,7 @@ function redisplayAllGifs(displaySize) { // necessary after changing screen size
 		gifDivArray.push(makeImageDiv(giffyAllResponses[i]));
 	}
 	$('#gif-display-area').empty();
+	gifDivArray = gifDivArray.reverse();
 	gifDisplayArea.append(gifDivArray);
 }
 
@@ -156,14 +171,17 @@ function searchGiffy() {
 			method: "GET"
 		}).then(function(response) {
 			for(let i = 0; i < response.data.length; i++) {
+				// Add responses to lastQuery and allQueries arrays
 				giffyLastQueryResponses.push(response.data[i]);
 				giffyAllResponses.push(response.data[i]);
 			}
 			let gifDivArray = [];
-			for(let i = giffyLastQueryResponses.length - 1; i >= 0; i--) { 
+			for(let i = 0; i < giffyLastQueryResponses.length; i++) {
+				// create a new array of divs to add to the page.
 				gifDivArray.push(makeImageDiv(giffyLastQueryResponses[i]));
 			} // For performance, append all elements at once to avoid excessive reflow:
-			gifDisplayArea.append(gifDivArray);
+			gifDivArray.reverse(gifDivArray);
+			gifDisplayArea.prepend(gifDivArray);
 			lastSearchTerm = searchTerm;
 		});
 }
@@ -184,8 +202,8 @@ function toggleGifAnimation() { // toggle an individual gif's animation on or of
 }
 
 // Initialize:
-screen.checkSize();
 displaySearchButtons();
+screen.checkSize();
 
 // Events:
 $('#add-new-search-term').on('click', addNewSearchButton);
@@ -196,7 +214,11 @@ $('#animate-none').on('click', stopAllAnimations);
 
 $(document.documentElement).on('click', '.giffy-search-button', searchGiffy);
 
-$(document.documentElement).on('click', '.animated-gif', toggleGifAnimation);
+$(document.documentElement).on('click', '.toggleable-animation-div', function() {
+	// Can't target the image directly because the caption overlay interferes with the click event.
+	let image = $(this).find('img'); // Find the image within the div.
+	toggleGifAnimation.call(image);  // Manually set $(this) with a .call to re-use the toggleGifAnimation function
+});
 
 $('form').on('keypress', function() { // Catching enter key here to prevent page from reloading when ENTER key is pressed:
 	if (event.key == 'Enter') {
@@ -220,12 +242,31 @@ $(document.documentElement).on('click', '.download-button', function () {
             responseType: 'blob'
         },
         success: function (data) {
+        	// I would like to convert this to jQuery syntax, but I don't really know how.
+        	// let a2 = $('<a>');
+        	// a2.attr('href', link);
+        	// a2.attr('download', fileName);
+        	// console.log(a2);
+        	// a2.trigger('click'); // this does nothing...
             let a = document.createElement('a');
             let url = window.URL.createObjectURL(data);
+            console.log('url is', url);
             a.href = url;
             a.download = fileName;
+            // console.log(a);
             a.click();
             window.URL.revokeObjectURL(url);
         }
     });
+});
+
+$(document.documentElement).on('mouseenter', '.animated-gif', function() {
+	let captions = $(this).parent().find('p');
+	captions.css('visibility', 'visible');
+	
+});
+
+$(document.documentElement).on('mouseleave', '.toggleable-animation-div', function() {
+	let captions = $(this).find('p');
+	captions.css('visibility', 'hidden');
 });
