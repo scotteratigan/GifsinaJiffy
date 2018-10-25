@@ -4,21 +4,57 @@
 const giffyAPIkey = 'LifqQYtiTIo3bDomGTB3jcQOa8jS5LQQ';
 const gifsDisplayedPerRequest = 10;
 const largeScreenSize = 968;
-let topics = ['thumbsup', 'highfive', 'smile', 'cheers', 'slow clap'];
-let tempImage;
+let topics = ['thumbsup', 'highfive', 'cheers', 'slow clap', 'good job', 'applause', 'grin'];
 
 // Initialization of variables:
-let searchButtons = [], giffyLastQueryResponses = [], giffyAllReponses = [], thumbnails = [];
+let searchButtons = [], // list of search Giffy search terms/buttons
+	giffyLastQueryResponses = [], // stores the last giffy query as array of JSON objects
+	giffyAllResponses = []; // stores all responses for a given search term (appends if you repeat a search) as array of JSON
 let gifDisplayArea = $('#gif-display-area');
-let animatedGifIdArray = []; // array of strings that store unique ID tags
-let lastSearchTerm = null, searchOffset = 0, screenSmall;
+let lastSearchTerm = null, searchOffset = 0;
 
-function makeSearchButton (searchTerm) {
-	let searchButton = $('<button>');
-	searchButton.text(searchTerm);
-	searchButton.attr('class', 'giffy-search-button');
-	searchButton.attr('data-search-string', searchTerm);
-	return searchButton;
+let screen = { // object to track screen size and resize gifs if screen grows or shrinks
+	isSmall: true,
+	wasSmall: true,
+	checkSize: function() {
+		if ($(document).width() < largeScreenSize) {
+			screen.isSmall = true;
+		}
+		else {
+			screen.isSmall = false;
+		}
+	},
+	resized: function() { // resized is called by a debounced window.resize event
+		screen.wasSmall = screen.isSmall;
+		screen.checkSize();
+		if (screen.isSmall && !screen.wasSmall) {
+			redisplayAllGifs('small');
+		}
+		else if (!screen.isSmall && screen.wasSmall) {
+			redisplayAllGifs('large');
+		}
+	}
+}
+
+function addNewSearchButton() {
+	let newSearchTerm = $('#new-search-term-text').val().trim().toLowerCase();
+	if (newSearchTerm !== "" && !topics.includes(newSearchTerm)) {
+		// Don't create empty search buttons, nor allow repeated search terms.
+		topics.push(newSearchTerm);
+		displaySearchButtons();
+	}
+	$('#new-search-term-text').val(''); // Clear out the text field for next entry.
+}
+
+function animateAllGIFs() { // AKA the fun button
+	jQuery.each($('.animated-gif'), function() { 
+		enableAnimation($(this));
+	});
+}
+
+function disableAnimation(image) {
+	image.attr('src', image.attr('data-url-still'));
+	image.attr('data-animated', 'false');
 }
 
 function displaySearchButtons() {
@@ -27,53 +63,13 @@ function displaySearchButtons() {
 		searchButtons.push(makeSearchButton(searchTerm));
 	});
 	$('#search-buttons-area').empty();
+	// For performance, append all elements at once to avoid excessive reflow:
 	$('#search-buttons-area').append(searchButtons);
-	// For performance, append all elements at once to avoid excessive reflow.
-	// Note: pure JS seems to be much faster than jquery, more info here:
-	// https://howchoo.com/g/mmu0nguznjg/learn-the-slow-and-fast-way-to-append-elements-to-the-dom
 }
 
-function addNewSearchButton() {
-	let newSearchTerm = $('#new-search-term-text').val();
-	if (newSearchTerm !== "" && !topics.includes(newSearchTerm)) {
-		topics.push(newSearchTerm);
-		displaySearchButtons();
-	}
-	$('#new-search-term-text').val(''); // Clear out the text field for next entry.
-}
-
-function searchGiffy() {
-	let searchTerm = $(this).attr('data-search-string');
-	if (searchTerm === lastSearchTerm) {
-		searchOffset += 10;
-	}
-	else {
-		searchOffset = 0;
-	}
-	// console.log('Searching for', searchTerm);
-    searchTerm = searchTerm.replace(" ", "+");
-	if (searchTerm !== lastSearchTerm) {
-		giffyLastQueryResponses = [];
-		giffyAllReponses = [];
-		$('#gif-display-area').empty();
-	}
-    let queryURL = `https://api.giphy.com/v1/gifs/search?q=${searchTerm}&limit=${gifsDisplayedPerRequest}&offset=${searchOffset}&api_key=${giffyAPIkey}`;
-    $.ajax({
-			url: queryURL,
-			method: "GET"
-		}).then(function(response) {
-			// console.log(response);
-			for(let i = 0; i < response.data.length; i++) {
-				giffyLastQueryResponses.push(response.data[i]);
-				giffyAllReponses.push(response.data[i]);
-			}
-			let gifDivArray = [];
-			for(let i = giffyLastQueryResponses.length - 1; i >= 0; i--) { 
-				gifDivArray.push(makeImageDiv(giffyLastQueryResponses[i]));
-			} // For performance, append all elements at once to avoid excessive reflow:
-			gifDisplayArea.append(gifDivArray);
-			lastSearchTerm = searchTerm;
-		}); //  end of ajax request
+function enableAnimation(image) {
+	image.attr('src', image.attr('data-url-animated'));
+	image.attr('data-animated', 'true');
 }
 
 function makeImage(giffyJSON) {
@@ -86,14 +82,6 @@ function makeImage(giffyJSON) {
 		image.attr('src', giffyJSON.images.fixed_height_small_still.url);
 		image.attr('data-url-still', giffyJSON.images.fixed_height_small_still.url)
 		image.attr('data-url-animated', giffyJSON.images.fixed_height_small.url)
-		// ajax call sorta worked (timing wise it was fine)
-		// however, images don't have width until they're displayed on the page.
-		// $.ajax({
-		// 	url: giffyJSON.images.fixed_height_small_still.url,
-		// 	method: "GET"
-		// }).then(function() {
-		// 	return image;
-		// });
 	}
 	else {
 		image.attr('data-size', 'large');
@@ -111,100 +99,105 @@ function makeImageDiv(giffyJSON) {
 	div.append(image);
 	let title = $('<p>').attr('class', 'gif-caption');
 	title.text(giffyJSON.title.toLowerCase());
-	setTimeout(function() {
+	setTimeout(function() { // resizing the div via timeout in case caption/title is wider than pic
+		// Can't resize until we have the width of the element after downloading it.
 		let width = image.width() + 'px'
 		title.attr('style', `width: ${width};`);
 	}, 333);
 	let rating = $('<p>').attr('class', 'gif-caption');
 	rating.text('Rating: ' + giffyJSON.rating);
+	let downloadFileName = giffyJSON.title.toLowerCase() + '.gif'
+	let downloadButton = $('<button>');
+	downloadButton.text('download');
+	downloadButton.attr('data-filename', downloadFileName);
+	downloadButton.attr('data-href', giffyJSON.images.original.url)
+	downloadButton.attr('class', 'download-button');
 	div.append(title);
 	div.append(rating);
-	// let innerDiv = $('<div>');
-	// innerDiv.append(title);
-	// innerDiv.append(rating);
-	// innerDiv.append(innerDiv);
-	// div.append(innerDiv);
+	div.append(downloadButton);
 	return div;
 }
 
-var screen = {
-	isSmall: true, // default to small
-	wasSmall: true,
-	checkSize: function() {
-		if ($(document).width() < largeScreenSize) {
-			screen.isSmall = true;
-		}
-		else {
-			screen.isSmall = false;
-		}
-	},
-	resized: function() {
-		// console.log("resized, checking size...");
-		screen.wasSmall = screen.isSmall;
-		// console.log("Screen was small?", screen.wasSmall);
-		screen.checkSize();
-		// console.log("Screen currently small?", screen.isSmall);
-		if (screen.isSmall && !screen.wasSmall) {
-			// console.log("Screen was shrunk.");
-			redisplayAllGifs('small');
-		}
-		else if (!screen.isSmall && screen.wasSmall) {
-			// console.log("Screen has grown.");
-			redisplayAllGifs('large');
-		}
-	}
+function makeSearchButton (searchTerm) { // generates a new button element for new search query
+	let searchButton = $('<button>');
+	searchButton.text(searchTerm);
+	searchButton.attr('class', 'giffy-search-button');
+	searchButton.attr('data-search-string', searchTerm);
+	return searchButton;
 }
 
-function animateAllGIFs() {
-	jQuery.each($('.animated-gif'), function() { 
-		enableAnimation($(this));
-	});
-}
-
-function stopAllAnimations() {
-	jQuery.each($('.animated-gif'), function() { 
-		disableAnimation($(this));
-	});
-}
-
-function redisplayAllGifs(displaySize) {
+function redisplayAllGifs(displaySize) { // necessary after changing screen size
 	let gifDivArray = [];
-	for (let i = 0; i < giffyAllReponses.length; i++) {
-		gifDivArray.push(makeImageDiv(giffyAllReponses[i]));
+	for (let i = 0; i < giffyAllResponses.length; i++) {
+		gifDivArray.push(makeImageDiv(giffyAllResponses[i]));
 	}
 	$('#gif-display-area').empty();
 	gifDisplayArea.append(gifDivArray);
 }
 
-function toggleGifAnimation() {
-	console.log(this);
-	let theImage = jQuery(this).find("img");
-	if (theImage.attr('data-animated') === 'false') {
-		enableAnimation(theImage);
+function searchGiffy() {
+	let searchTerm = $(this).attr('data-search-string');
+	if (searchTerm === lastSearchTerm) {
+		searchOffset += 10;
 	}
 	else {
-		disableAnimation(theImage);
+		searchOffset = 0;
+	}
+    searchTerm = searchTerm.replace(" ", "+");
+    giffyLastQueryResponses = [];
+	if (searchTerm !== lastSearchTerm) {
+		//giffyLastQueryResponses = [];
+		giffyAllResponses = [];
+		$('#gif-display-area').empty();
+	}
+    let queryURL = `https://api.giphy.com/v1/gifs/search?q=${searchTerm}&limit=${gifsDisplayedPerRequest}&offset=${searchOffset}&api_key=${giffyAPIkey}`;
+    $.ajax({
+			url: queryURL,
+			method: "GET"
+		}).then(function(response) {
+			for(let i = 0; i < response.data.length; i++) {
+				giffyLastQueryResponses.push(response.data[i]);
+				giffyAllResponses.push(response.data[i]);
+			}
+			let gifDivArray = [];
+			for(let i = giffyLastQueryResponses.length - 1; i >= 0; i--) { 
+				gifDivArray.push(makeImageDiv(giffyLastQueryResponses[i]));
+			} // For performance, append all elements at once to avoid excessive reflow:
+			gifDisplayArea.append(gifDivArray);
+			lastSearchTerm = searchTerm;
+		});
+}
+
+function stopAllAnimations() { // aka the no more fun button
+	jQuery.each($('.animated-gif'), function() { 
+		disableAnimation($(this));
+	});
+}
+
+function toggleGifAnimation() { // toggle an individual gif's animation on or off
+	if ($(this).attr('data-animated') === 'false') {
+		enableAnimation($(this));
+	}
+	else {
+		disableAnimation($(this));
 	}
 }
 
-function disableAnimation(image) {
-	image.attr('src', image.attr('data-url-still'));
-	image.attr('data-animated', 'false');
-}
-
-function enableAnimation(image) {
-	image.attr('src', image.attr('data-url-animated'));
-	image.attr('data-animated', 'true');
-}
-
-// Initialize display and add event listeners:
+// Initialize:
 screen.checkSize();
 displaySearchButtons();
+
+// Events:
 $('#add-new-search-term').on('click', addNewSearchButton);
+
 $('#animate-all').on('click', animateAllGIFs);
+
 $('#animate-none').on('click', stopAllAnimations);
+
 $(document.documentElement).on('click', '.giffy-search-button', searchGiffy);
-$(document.documentElement).on('click', '.toggleable-animation-div', toggleGifAnimation);
+
+$(document.documentElement).on('click', '.animated-gif', toggleGifAnimation);
+
 $('form').on('keypress', function() { // Catching enter key here to prevent page from reloading when ENTER key is pressed:
 	if (event.key == 'Enter') {
 		event.preventDefault();
@@ -215,4 +208,24 @@ $('form').on('keypress', function() { // Catching enter key here to prevent page
 $(window).resize(function() { // Essentially a debouncer to check screen size 250ms after a screen change event:
 	if(this.resizeTO) clearTimeout(this.resizeTO);
 	this.resizeTO = setTimeout(screen.resized, 250);
+});
+
+$(document.documentElement).on('click', '.download-button', function () {
+	let link = $(this).attr('data-href');
+	let fileName = $(this).attr('data-filename');
+    $.ajax({
+        url: link,
+        method: 'GET',
+        xhrFields: {
+            responseType: 'blob'
+        },
+        success: function (data) {
+            let a = document.createElement('a');
+            let url = window.URL.createObjectURL(data);
+            a.href = url;
+            a.download = fileName;
+            a.click();
+            window.URL.revokeObjectURL(url);
+        }
+    });
 });

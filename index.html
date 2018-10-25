@@ -6,24 +6,28 @@
     <title>GIFs in a Jiffy!</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" type="text/css" href="assets/css/reset.css">
+    <link href="https://fonts.googleapis.com/css?family=Titillium+Web" rel="stylesheet">
     <link rel="stylesheet" type="text/css" media="screen" href="assets/css/style.css" />
     <link rel="shortcut icon" href="assets/images/favicon-32x32.png">
 </head>
 <body>
-	<h1>GIFs in a Jiffy <img src="assets/images/giphy/PoweredBy_200px-White_HorizText.png"></h1>
-	<p>Click search buttons below to display GIFs. Clicking the same button again will prepend MORE GIFS! Clicking a different search term will clear the previous results.</p>
-	<div id="search-buttons-area"></div>
-	<hr>
-	<form>
-		<input id="new-search-term-text" name="new-search-term" type="text">
-		<button type="button" id="add-new-search-term">Add new search term.</button>
-		<button type="button" id="animate-all">Animate everything!</button>
-		<button type="button" id="animate-none">Animate nothing.</button>
-	</form>
-	<hr>
-	<div id="gif-display-area" class="container"></div>
+	<header>
+		<h1><span class="italics-on-hover">Enthusiastic</span> GIFs in a Jiffy <img src="assets/images/giphy/PoweredBy_200px-White_HorizText.png"></h1>
+		<h5>Click search buttons below to display GIFs. Clicking the same button again will prepend MORE GIFS! Clicking a different search term will clear the previous results.</h5>
+		<div id="search-buttons-area"></div>
+		<hr>
+		<form>
+			<input id="new-search-term-text" name="new-search-term" type="text">
+			<button type="button" id="add-new-search-term">Add new search term.</button>
+			<button type="button" id="animate-all">Animate everything!</button>
+			<button type="button" id="animate-none">Animate nothing.</button>
+		</form>
+		<hr>
+	</header>
+	<main>
+		<div id="gif-display-area" class="container"></div>
+	</main>
 	<script src="assets/javascript/jquery-3.3.1.min.js"></script>
     <script src="assets/javascript/script.js"></script>
-
 </body>
 </html>
