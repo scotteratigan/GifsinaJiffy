@@ -1,19 +1,17 @@
 'use strict';
 
-// todo: remove redundant use of searchterm?
-
 // Configuration options:
 const giffyAPIkey = 'LifqQYtiTIo3bDomGTB3jcQOa8jS5LQQ';
-const preLoadGIFsInBackground = false;
 const gifsDisplayedPerRequest = 10;
-var topics = ['cats', 'dogs', 'guinea pigs', 'meerkats'];
+const largeScreenSize = 968;
+let topics = ['thumbsup', 'highfive', 'smile', 'cheers', 'slow clap'];
+let tempImage;
 
 // Initialization of variables:
-var searchButtons = [], gifList = [];
-var gifDisplayArea = $('#gif-display-area');
-var animatedGifPreloadArray = []; // array of images
-var animatedGifIdArray = []; // array of strings that store unique ID tags
-var lastSearchTerm = null, searchOffset = 0;
+let searchButtons = [], giffyLastQueryResponses = [], giffyAllReponses = [], thumbnails = [];
+let gifDisplayArea = $('#gif-display-area');
+let animatedGifIdArray = []; // array of strings that store unique ID tags
+let lastSearchTerm = null, searchOffset = 0, screenSmall;
 
 function makeSearchButton (searchTerm) {
 	let searchButton = $('<button>');
@@ -29,10 +27,10 @@ function displaySearchButtons() {
 		searchButtons.push(makeSearchButton(searchTerm));
 	});
 	$('#search-buttons-area').empty();
-	$('#search-buttons-area').append(searchButtons); // for performance, append all elements at once to avoid excessive reflow.
+	$('#search-buttons-area').append(searchButtons);
+	// For performance, append all elements at once to avoid excessive reflow.
 	// Note: pure JS seems to be much faster than jquery, more info here:
 	// https://howchoo.com/g/mmu0nguznjg/learn-the-slow-and-fast-way-to-append-elements-to-the-dom
-	// I'm only using jQuery because of assignment guidelines in this case.
 }
 
 function addNewSearchButton() {
@@ -45,7 +43,6 @@ function addNewSearchButton() {
 }
 
 function searchGiffy() {
-	// todo: consider caching search results? wouldn't work easily with pagination, however. And where to store the results?
 	let searchTerm = $(this).attr('data-search-string');
 	if (searchTerm === lastSearchTerm) {
 		searchOffset += 10;
@@ -53,111 +50,169 @@ function searchGiffy() {
 	else {
 		searchOffset = 0;
 	}
-	console.log('Searching for', searchTerm);
+	// console.log('Searching for', searchTerm);
     searchTerm = searchTerm.replace(" ", "+");
 	if (searchTerm !== lastSearchTerm) {
-		gifList = [];
-		$('#gif-display-area').empty()
+		giffyLastQueryResponses = [];
+		giffyAllReponses = [];
+		$('#gif-display-area').empty();
 	}
     let queryURL = `https://api.giphy.com/v1/gifs/search?q=${searchTerm}&limit=${gifsDisplayedPerRequest}&offset=${searchOffset}&api_key=${giffyAPIkey}`;
     $.ajax({
 			url: queryURL,
 			method: "GET"
 		}).then(function(response) {
-			for(let i=0; i < response.data.length; i++) {
-				let theGif = new GiffyObject(response.data[i]);
-				gifList.push(theGif);
+			// console.log(response);
+			for(let i = 0; i < response.data.length; i++) {
+				giffyLastQueryResponses.push(response.data[i]);
+				giffyAllReponses.push(response.data[i]);
 			}
-			displayGIFs();
+			let gifDivArray = [];
+			for(let i = giffyLastQueryResponses.length - 1; i >= 0; i--) { 
+				gifDivArray.push(makeImageDiv(giffyLastQueryResponses[i]));
+			} // For performance, append all elements at once to avoid excessive reflow:
+			gifDisplayArea.append(gifDivArray);
 			lastSearchTerm = searchTerm;
-		}); // end of ajax request
+		}); //  end of ajax request
 }
 
-function displayGIFs() {
-	// todo: append all items at once for performance!!!
-	for(let i=0; i < gifList.length; i++) {
-		let gifDiv = $('<div>');
-		gifDisplayArea.append(gifList[i].imageDiv);
+function makeImage(giffyJSON) {
+	let image = $('<img>');
+	image.attr('alt', giffyJSON.title.toLowerCase());
+	image.attr('data-animated', 'false');
+	image.attr('class', 'animated-gif');
+	if (screen.isSmall) {
+		image.attr('data-size', 'small');
+		image.attr('src', giffyJSON.images.fixed_height_small_still.url);
+		image.attr('data-url-still', giffyJSON.images.fixed_height_small_still.url)
+		image.attr('data-url-animated', giffyJSON.images.fixed_height_small.url)
+		// ajax call sorta worked (timing wise it was fine)
+		// however, images don't have width until they're displayed on the page.
+		// $.ajax({
+		// 	url: giffyJSON.images.fixed_height_small_still.url,
+		// 	method: "GET"
+		// }).then(function() {
+		// 	return image;
+		// });
 	}
-	if (preLoadGIFsInBackground)
-	{ // after displaying the still images, pre-load all animated gifs:
-		for(let i=0; i < gifList.length; i++) {
-			if (!animatedGifIdArray.contains(gifList[i].id)) {
-				animatedGifIdArray.push(gifList[i].id);
-				let gifToPreload = new Image();
-				gifToPreload.src = gifList[i].animatedURL;
-				animatedGifPreloadArray.push(gifToPreload);
-			}
+	else {
+		image.attr('data-size', 'large');
+		image.attr('src', giffyJSON.images.fixed_height_still.url);
+		image.attr('data-url-still', giffyJSON.images.fixed_height_still.url)
+		image.attr('data-url-animated', giffyJSON.images.fixed_height.url)
+	}
+	return image;
+}
+
+function makeImageDiv(giffyJSON) {
+	let div = $('<div>');
+	div.attr('class', 'toggleable-animation-div');
+	let image = makeImage(giffyJSON);
+	div.append(image);
+	let title = $('<p>').attr('class', 'gif-caption');
+	title.text(giffyJSON.title.toLowerCase());
+	setTimeout(function() {
+		let width = image.width() + 'px'
+		title.attr('style', `width: ${width};`);
+	}, 333);
+	let rating = $('<p>').attr('class', 'gif-caption');
+	rating.text('Rating: ' + giffyJSON.rating);
+	div.append(title);
+	div.append(rating);
+	// let innerDiv = $('<div>');
+	// innerDiv.append(title);
+	// innerDiv.append(rating);
+	// innerDiv.append(innerDiv);
+	// div.append(innerDiv);
+	return div;
+}
+
+var screen = {
+	isSmall: true, // default to small
+	wasSmall: true,
+	checkSize: function() {
+		if ($(document).width() < largeScreenSize) {
+			screen.isSmall = true;
+		}
+		else {
+			screen.isSmall = false;
+		}
+	},
+	resized: function() {
+		// console.log("resized, checking size...");
+		screen.wasSmall = screen.isSmall;
+		// console.log("Screen was small?", screen.wasSmall);
+		screen.checkSize();
+		// console.log("Screen currently small?", screen.isSmall);
+		if (screen.isSmall && !screen.wasSmall) {
+			// console.log("Screen was shrunk.");
+			redisplayAllGifs('small');
+		}
+		else if (!screen.isSmall && screen.wasSmall) {
+			// console.log("Screen has grown.");
+			redisplayAllGifs('large');
 		}
 	}
 }
 
-function GiffyObject(gifObject) {
-	console.log(gifObject);
-	this.staticURL = gifObject.images.original_still.url;
-	this.animatedURL = gifObject.images.original.url;
-	this.title = gifObject.title;
-	this.rating = gifObject.rating;
-	this.id = gifObject.id;
-	this.imageElement = $('<img>');
-	this.imageElement.attr('src', this.staticURL);
-	this.imageElement.attr('alt', this.title);
-	this.imageElement.attr('class', 'toggleable-gif');
-	this.imageElement.attr('data-still-url', this.staticURL);
-	this.imageElement.attr('data-animated-url', this.animatedURL);
-	this.imageElement.attr('data-currently-animated', 'false');
-	this.imageDiv = $('<div>');
-	this.imageDiv.attr('class', 'image-div');
-	this.imageDiv.append(this.imageElement);
-	this.imageDiv.append(`<p>Title: ${this.title}</p>`);
-	this.imageDiv.append(`<p>Rating: ${this.rating}</p>`);
-	this.downloadButton = $('<button>');
-	this.downloadButton.text('Download');
-	this.downloadButton.attr('data-download-src', this.animatedURL); // allows default action to be download.
-	this.downloadButton.attr('class', 'download-button');
-	this.imageDiv.append(this.downloadButton);
-	console.log(this.imageDiv);
+function animateAllGIFs() {
+	jQuery.each($('.animated-gif'), function() { 
+		enableAnimation($(this));
+	});
+}
 
-	// One proposed solution:
-	//$("#fileRequest").click(function() {
-    // // hope the server sets Content-Disposition: attachment!
-    //window.location = 'file.doc';
-	//});
+function stopAllAnimations() {
+	jQuery.each($('.animated-gif'), function() { 
+		disableAnimation($(this));
+	});
+}
 
-	// another:
-	// <input type="button" value="Download Now!" onclick="window.location = 'file.doc';">
-
+function redisplayAllGifs(displaySize) {
+	let gifDivArray = [];
+	for (let i = 0; i < giffyAllReponses.length; i++) {
+		gifDivArray.push(makeImageDiv(giffyAllReponses[i]));
+	}
+	$('#gif-display-area').empty();
+	gifDisplayArea.append(gifDivArray);
 }
 
 function toggleGifAnimation() {
-	let currentlyAnimated = $(this).attr('data-currently-animated');
-	if (currentlyAnimated === 'false') {
-		$(this).attr('src', $(this).attr('data-animated-url'))
-		$(this).attr('data-currently-animated', true);
+	console.log(this);
+	let theImage = jQuery(this).find("img");
+	if (theImage.attr('data-animated') === 'false') {
+		enableAnimation(theImage);
 	}
 	else {
-		$(this).attr('src', $(this).attr('data-still-url'))
-		$(this).attr('data-currently-animated', false);
+		disableAnimation(theImage);
 	}
 }
 
-function downloadGif() {
-	console.log("Downloading this...");
-	console.log(this);
-	let downloadURL = $(this).attr('data-download-src');
-	window.location.href = downloadURL;
+function disableAnimation(image) {
+	image.attr('src', image.attr('data-url-still'));
+	image.attr('data-animated', 'false');
+}
+
+function enableAnimation(image) {
+	image.attr('src', image.attr('data-url-animated'));
+	image.attr('data-animated', 'true');
 }
 
 // Initialize display and add event listeners:
+screen.checkSize();
 displaySearchButtons();
 $('#add-new-search-term').on('click', addNewSearchButton);
+$('#animate-all').on('click', animateAllGIFs);
+$('#animate-none').on('click', stopAllAnimations);
 $(document.documentElement).on('click', '.giffy-search-button', searchGiffy);
-$(document.documentElement).on('click', '.toggleable-gif', toggleGifAnimation);
-$('form').on('keypress', function() {
-	// Catching enter key here to prevent page from reloading when ENTER key is pressed.
+$(document.documentElement).on('click', '.toggleable-animation-div', toggleGifAnimation);
+$('form').on('keypress', function() { // Catching enter key here to prevent page from reloading when ENTER key is pressed:
 	if (event.key == 'Enter') {
 		event.preventDefault();
 		addNewSearchButton();
 	}
 });
-$(document.documentElement).on('click', '.download-button', downloadGif);
+
+$(window).resize(function() { // Essentially a debouncer to check screen size 250ms after a screen change event:
+	if(this.resizeTO) clearTimeout(this.resizeTO);
+	this.resizeTO = setTimeout(screen.resized, 250);
+});
